@@ -15,6 +15,9 @@ all pages all uploaded to the site ./sokolovdp.github.io/
    7524941..8b9ccc8  master -> master
 folder ./articles/ is monitored for changes
 
+# Site with articles
+https://sokolovdp.github.io/index.html
+
 
 # Project Goals
 
