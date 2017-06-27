@@ -6,12 +6,15 @@ from markdown import markdown
 import subprocess
 import datetime
 import time
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
 
 config_file = 'config.json'
 index_file = 'index.html'
 index_template = 'index_template.html'
 article_template = 'article_template.html'
-site_folder_name = "sokolovdp.github.io"
+site_folder_name = "./sokolovdp.github.io/"
+articles_folder = "./articles/"
 
 
 def load_decoded_data(filename: "str") -> "str":
@@ -22,10 +25,7 @@ def load_decoded_data(filename: "str") -> "str":
 
 
 def load_json_data(filename: "str") -> "dict":
-    try:
-        return json.loads(load_decoded_data(filename))
-    except json.decoder.JSONDecodeError:
-        print("file {} contains invalid json data, load aborted!".format(filename))
+    return json.loads(load_decoded_data(filename))
 
 
 def fetch_articles(json_catalog: "dict") -> "dict":
@@ -65,23 +65,14 @@ def write_html_page(filename: "str", html_text: "str"):
         f.write(html_text)
 
 
-def clean_output_directory(dir_name: "str") -> "bool":
+def clean_site_directory(dir_name: "str"):
     if not os.path.exists(dir_name):
         os.makedirs(dir_name)
     else:
         for file in os.listdir(dir_name):
             file_path = os.path.join(dir_name, file)
-            try:
-                if os.path.isfile(file_path):
-                    os.unlink(file_path)
-                    # elif os.path.isdir(file_path): shutil.rmtree(file_path)
-            except OSError:
-                print("access error: file {} is used by another process".format(file_path))
-                return False
-            except Exception as e:
-                print(e)
-                return False
-    return True
+            if os.path.isfile(file_path):  # delete file
+                os.unlink(file_path)
 
 
 def current_date_time() -> "str":
@@ -95,10 +86,13 @@ def push_site_to_github(site_dir):
     subprocess.call(f'git commit -m "commit done at {current_date_time()}"')
     subprocess.call('git push -u origin master')
     os.chdir(current_directory)
-    return True
 
 
-def main(config: "str", site_directory: "str"):
+def prepare_and_upload_site_to_github(config: "str", site_directory: "str"):
+    print(f"started site {site_directory} update process, config file: {config}")
+
+    clean_site_directory(site_directory)
+
     json_data = load_json_data(config)
     index = fetch_articles(json_data)
 
@@ -116,8 +110,28 @@ def main(config: "str", site_directory: "str"):
         write_html_page(f"{site_directory}{article_file}", article_html_page)
 
     push_site_to_github(site_directory)
+    print(f"all pages all uploaded to the site {site_directory}")
+
+
+class MyHandler(FileSystemEventHandler):
+
+    def on_any_event(self, event):
+        print(f"path={event.src_path} event={event.event_type}")
+        if event.is_directory:
+            return None
+        prepare_and_upload_site_to_github(config_file, site_folder_name)
+        print(f"folder {articles_folder} is monitored for changes")
 
 
 if __name__ == "__main__":
-    if clean_output_directory(site_folder_name):
-        main(config_file, f"./{site_folder_name}/")
+    prepare_and_upload_site_to_github(config_file, site_folder_name)
+    observer = Observer()
+    observer.schedule(MyHandler(), articles_folder, recursive=True)
+    observer.start()
+    print(f"folder {articles_folder} is monitored for changes")
+    try:
+        while True:
+            time.sleep(5)
+    except KeyboardInterrupt:
+        observer.stop()
+    observer.join()
