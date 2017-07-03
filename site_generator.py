@@ -8,12 +8,13 @@ import datetime
 import time
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
+import sys
 
 config_file = 'config.json'
 index_file = 'index.html'
 index_template = 'index_template.html'
 article_template = 'article_template.html'
-site_folder_name = "./sokolovdp.github.io/"
+site_folder_name = ""
 articles_folder = "./articles/"
 
 
@@ -82,9 +83,9 @@ def current_date_time() -> "str":
 def push_site_to_github(site_dir):
     current_directory = os.getcwd()
     os.chdir(site_dir)
-    subprocess.call('git add --all')
-    subprocess.call('git commit -m "commit done at {}"'.format(current_date_time()))
-    subprocess.call('git push -u origin master')
+    subprocess.call(['git', 'add', '--all'])
+    subprocess.call(['git', 'commit', '-m', 'commit done at {}'.format(current_date_time())])
+    subprocess.call(['git', 'push', '-u', 'origin master'])
     os.chdir(current_directory)
 
 
@@ -123,6 +124,10 @@ class MyHandler(FileSystemEventHandler):
 
 
 if __name__ == "__main__":
+
+    site_url = sys.argv[1:][0]
+    site_folder_name = "./" + site_url + "/"
+
     prepare_and_upload_site_to_github(config_file, site_folder_name)
     observer = Observer()
     observer.schedule(MyHandler(), articles_folder, recursive=True)

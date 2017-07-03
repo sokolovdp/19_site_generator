@@ -1,8 +1,44 @@
 # Encyclopedia
 
-Sample site_generator of web-sites with statics pages
-Source folder 'articles' will be monitored for any changes, and then htnl pages will be updated accordingly
+Simple generator of web-site with statics pages (kind of library) to be uploaded to github.pages
+Source folder 'articles' will be monitored for any changes, and then html pages will be updated accordingly
 
+# Usage
+In the current folder create subfolder 'articles' with articles to be published, then
+create JSON config file config.json in the current folder with library structure description.
+Run generator:
+```
+python site_generator.py sokolovdp.github.io
+```
+# Sample CONFIG.JSON file
+```
+{
+    "topics": [
+        {
+            "slug": "tutorial",
+            "title": "Арсенал"
+        },
+        {
+            "slug": "python_basics",
+            "title": "Основы Питона"
+        },
+        ...
+    ],
+    "articles": [
+        {
+            "source": "0_tutorial/14_google.md",
+            "title": "Гугл",
+            "topic": "tutorial"
+        },
+        {
+            "source": "0_tutorial/27_devman.md",
+            "title": "Девман",
+            "topic": "tutorial"
+        },
+        ...
+    ]
+}
+```
 # Sample output
 ```
 folder ./articles/ is monitored for changes
