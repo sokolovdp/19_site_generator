@@ -125,7 +125,7 @@ class MyHandler(FileSystemEventHandler):
 
 if __name__ == "__main__":
 
-    site_url = sys.argv[1:][0]
+    site_url = sys.argv[1]
     site_folder_name = "./" + site_url + "/"
 
     prepare_and_upload_site_to_github(config_file, site_folder_name)
