@@ -1,21 +1,26 @@
-import jinja2
+# System modules
+import sys
+import os
 import json
 import chardet
-import os
-from markdown import markdown
-import subprocess
-import datetime
+from datetime import datetime
 import time
+import subprocess
+# Application modules
+from markdown import markdown
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
-import sys
+import jinja2
 
-config_file = 'config.json'
-index_file = 'index.html'
-index_template = 'index_template.html'
-article_template = 'article_template.html'
+# Global constants
+CONFIG_FILE = 'config.json'
+INDEX_FILE = 'index.html'
+INDEX_TEMPLATE = 'index_template.html'
+ARTICLE_TEMPLATE = 'article_template.html'
+ARTICLES_FOLDER = "./articles/"
+
+# Global vars
 site_folder_name = ""
-articles_folder = "./articles/"
 
 
 def load_decoded_data(filename: "str") -> "str":
@@ -25,20 +30,20 @@ def load_decoded_data(filename: "str") -> "str":
     return raw_data.decode(encoding)
 
 
-def load_json_data(filename: "str") -> "dict":
-    return json.loads(load_decoded_data(filename))
+def load_json_data(file_name: "str") -> "dict":
+    return json.loads(load_decoded_data(file_name))
 
 
 def fetch_articles(json_catalog: "dict") -> "dict":
     articles = json_catalog['articles']
     topics = json_catalog['topics']
-    for aid, article in enumerate(articles):
-        article['source'] = 'articles/' + article['source']
-        article['id'] = aid
+    for article_id, article_text in enumerate(articles):
+        article_text['source'] = 'articles/' + article_text['source']
+        article_text['id'] = article_id
     return {'articles': articles, 'topics': topics}
 
 
-def render(html_template: "str", context: "dict") -> "str":
+def render_page(html_template: "str", context: "dict") -> "str":
     return jinja2.Environment(loader=jinja2.FileSystemLoader('./')).get_template(html_template).render(context)
 
 
@@ -77,7 +82,7 @@ def clean_site_directory(dir_name: "str"):
 
 
 def current_date_time() -> "str":
-    return datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S')
+    return datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S')
 
 
 def push_site_to_github(site_dir):
@@ -99,14 +104,14 @@ def prepare_and_upload_site_to_github(config: "str", site_directory: "str"):
 
     index_html = create_index_html(index)
     index_context = dict(index_html=index_html)
-    index_html_page = render(index_template, index_context)
-    write_html_page(site_directory + index_file, index_html_page)
+    index_html_page = render_page(INDEX_TEMPLATE, index_context)
+    write_html_page(site_directory + INDEX_FILE, index_html_page)
 
     for article in index['articles']:
         article_text = load_article_text(article['source'], article['title'])
         article_html = markdown(article_text, safe_mode='escape')
         article_context = dict(article_html=article_html)
-        article_html_page = render(article_template, article_context)
+        article_html_page = render_page(ARTICLE_TEMPLATE, article_context)
         article_file = "{:03d}.html".format(article['id'])
         write_html_page(site_directory + article_file, article_html_page)
 
@@ -119,8 +124,8 @@ class MyHandler(FileSystemEventHandler):
         print("path={} event={}".format(event.src_path, event.event_type))
         if event.is_directory:
             return None
-        prepare_and_upload_site_to_github(config_file, site_folder_name)
-        print("folder {} is monitored for changes".format(articles_folder))
+        prepare_and_upload_site_to_github(CONFIG_FILE, site_folder_name)
+        print("folder {} is monitored for changes".format(ARTICLES_FOLDER))
 
 
 if __name__ == "__main__":
@@ -128,11 +133,11 @@ if __name__ == "__main__":
     site_url = sys.argv[1]
     site_folder_name = "./" + site_url + "/"
 
-    prepare_and_upload_site_to_github(config_file, site_folder_name)
+    prepare_and_upload_site_to_github(CONFIG_FILE, site_folder_name)
     observer = Observer()
-    observer.schedule(MyHandler(), articles_folder, recursive=True)
+    observer.schedule(MyHandler(), ARTICLES_FOLDER, recursive=True)
     observer.start()
-    print("folder {} is monitored for changes".format(articles_folder))
+    print("folder {} is monitored for changes".format(ARTICLES_FOLDER))
     try:
         while True:
             time.sleep(5)
