@@ -119,7 +119,7 @@ def prepare_and_upload_site_to_github(config: "str", site_directory: "str"):
     print("all pages all uploaded to the site {}".format(site_directory))
 
 
-class MyHandler(FileSystemEventHandler):
+class DirEventsHandler(FileSystemEventHandler):
     def on_any_event(self, event):
         print("path={} event={}".format(event.src_path, event.event_type))
         if event.is_directory:
@@ -129,13 +129,12 @@ class MyHandler(FileSystemEventHandler):
 
 
 if __name__ == "__main__":
-
     site_url = sys.argv[1]
     site_folder_name = "./" + site_url + "/"
 
     prepare_and_upload_site_to_github(CONFIG_FILE, site_folder_name)
     observer = Observer()
-    observer.schedule(MyHandler(), ARTICLES_FOLDER, recursive=True)
+    observer.schedule(DirEventsHandler(), ARTICLES_FOLDER, recursive=True)
     observer.start()
     print("folder {} is monitored for changes".format(ARTICLES_FOLDER))
     try:
