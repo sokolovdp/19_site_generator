@@ -1,4 +1,3 @@
-# System modules
 import sys
 import os
 import json
@@ -6,11 +5,11 @@ import chardet
 from datetime import datetime
 import time
 import subprocess
-# Application modules
+
+import jinja2
 from markdown import markdown
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
-import jinja2
 
 # Global constants
 CONFIG_FILE = 'config.json'
@@ -24,8 +23,8 @@ site_folder_name = ""
 
 
 def load_decoded_data(filename: "str") -> "str":
-    with open(filename, "rb") as file:
-        raw_data = file.read()
+    with open(filename, "rb") as source_file:
+        raw_data = source_file.read()
     encoding = chardet.detect(raw_data)['encoding']
     return raw_data.decode(encoding)
 
@@ -48,35 +47,35 @@ def render_page(html_template: "str", context: "dict") -> "str":
 
 
 def create_index_html(catalog_data: "dict") -> "str":
-    md_text = ''
+    markdown_text = ''
     for topic in catalog_data['topics']:
         head_line = "## {}\n".format(topic['title'])
-        md_text = md_text + head_line
+        markdown_text = markdown_text + head_line
         for article in catalog_data['articles']:
             if article['topic'] == topic['slug']:
-                art_line = "- [{}](./{:03d}.html)\n".format(article['title'], article['id'])
-                md_text = md_text + art_line
-    return markdown(md_text, safe_mode='escape')
+                article_headline = "- [{}](./{:03d}.html)\n".format(article['title'], article['id'])
+                markdown_text = markdown_text + article_headline
+    return markdown(markdown_text, safe_mode='escape')
 
 
 def load_article_text(filename: "str", title: "str") -> "str":
-    with open(filename, encoding='utf-8') as f_text:
-        md_text = f_text.read()
+    with open(filename, encoding='utf-8') as text_file:
+        md_text = text_file.read()
     md_text = "##{}\n{}".format(title, md_text)  # add title to article text
     return md_text
 
 
 def write_html_page(filename: "str", html_text: "str"):
-    with open(file=filename, mode='w', encoding='utf-8') as f:
-        f.write(html_text)
+    with open(file=filename, mode='w', encoding='utf-8') as html_file:
+        html_file.write(html_text)
 
 
 def clean_site_directory(dir_name: "str"):
     if not os.path.exists(dir_name):
         os.makedirs(dir_name)
     else:
-        for file in os.listdir(dir_name):
-            file_path = os.path.join(dir_name, file)
+        for file_name in os.listdir(dir_name):
+            file_path = os.path.join(dir_name, file_name)
             if os.path.isfile(file_path):  # delete file
                 os.unlink(file_path)
 
