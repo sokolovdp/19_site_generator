@@ -1,39 +1,41 @@
 import sys
 import os
+import shutil
 import json
 import chardet
 from datetime import datetime
 import time
 import subprocess
+import re
 
 import jinja2
 from markdown import markdown
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
-# Global constants
-CONFIG_FILE = 'config.json'
-INDEX_FILE = 'index.html'
-INDEX_TEMPLATE = 'index_template.html'
-ARTICLE_TEMPLATE = 'article_template.html'
+CONFIG_FILE = "config.json"
+INDEX_FILE = "index.html"
+INDEX_TEMPLATE = "index_template.html"
+ARTICLE_TEMPLATE = "article_template.html"
 ARTICLES_FOLDER = "./articles/"
+HEADLINE_PREFIX = "## {}\n"
+MONITOR_TIMEOUT = 5
+CURRENT_DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
+DOMAIN_FORMAT = r"(^([a-zA-Z0-9][a-zA-Z0-9]*\.)?[a-zA-Z][a-zA-Z0-9]+\.[a-zA-Z]{1,3}$)"
 
-# Global vars
-site_folder_name = ""
 
-
-def load_decoded_data(filename: "str") -> "str":
+def load_decoded_data(filename: str) -> str:
     with open(filename, "rb") as source_file:
         raw_data = source_file.read()
     encoding = chardet.detect(raw_data)['encoding']
     return raw_data.decode(encoding)
 
 
-def load_json_data(file_name: "str") -> "dict":
+def load_json_data(file_name: str) -> dict:
     return json.loads(load_decoded_data(file_name))
 
 
-def fetch_articles(json_catalog: "dict") -> "dict":
+def fetch_articles(json_catalog: dict) -> dict:
     articles = json_catalog['articles']
     topics = json_catalog['topics']
     for article_id, article_text in enumerate(articles):
@@ -42,14 +44,14 @@ def fetch_articles(json_catalog: "dict") -> "dict":
     return {'articles': articles, 'topics': topics}
 
 
-def render_page(html_template: "str", context: "dict") -> "str":
+def render_page(html_template: str, context: dict) -> str:
     return jinja2.Environment(loader=jinja2.FileSystemLoader('./')).get_template(html_template).render(context)
 
 
-def create_index_html(catalog_data: "dict") -> "str":
-    markdown_text = ''
+def create_index_html(catalog_data: dict) -> str:
+    markdown_text = ""
     for topic in catalog_data['topics']:
-        head_line = "## {}\n".format(topic['title'])
+        head_line = HEADLINE_PREFIX.format(topic['title'])
         markdown_text = markdown_text + head_line
         for article in catalog_data['articles']:
             if article['topic'] == topic['slug']:
@@ -58,30 +60,29 @@ def create_index_html(catalog_data: "dict") -> "str":
     return markdown(markdown_text, safe_mode='escape')
 
 
-def load_article_text(filename: "str", title: "str") -> "str":
+def load_article_text_from_file(filename: str, title: str) -> str:
     with open(filename, encoding='utf-8') as text_file:
-        md_text = text_file.read()
-    md_text = "##{}\n{}".format(title, md_text)  # add title to article text
-    return md_text
+        markdown_text = text_file.read()
+    head_line = HEADLINE_PREFIX.format(title)
+    markdown_text = head_line + markdown_text
+    return markdown_text
 
 
-def write_html_page(filename: "str", html_text: "str"):
+def write_html_page_to_file(filename: str, html_text: str):
     with open(file=filename, mode='w', encoding='utf-8') as html_file:
         html_file.write(html_text)
 
 
-def clean_site_directory(dir_name: "str"):
+def clean_site_directory(dir_name: str):
     if not os.path.exists(dir_name):
         os.makedirs(dir_name)
     else:
-        for file_name in os.listdir(dir_name):
-            file_path = os.path.join(dir_name, file_name)
-            if os.path.isfile(file_path):  # delete file
-                os.unlink(file_path)
+        shutil.rmtree(dir_name, ignore_errors=True)
+        os.makedirs(dir_name)
 
 
-def current_date_time() -> "str":
-    return datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S')
+def current_date_time() -> str:
+    return datetime.fromtimestamp(time.time()).strftime(CURRENT_DATE_FORMAT)
 
 
 def push_site_to_github(site_dir):
@@ -93,10 +94,8 @@ def push_site_to_github(site_dir):
     os.chdir(current_directory)
 
 
-def prepare_and_upload_site_to_github(config: "str", site_directory: "str"):
+def prepare_and_upload_site_to_github(config: str, site_directory: str):
     print("started text update for site {}, config file: {}".format(site_directory, config))
-
-    clean_site_directory(site_directory)
 
     json_data = load_json_data(config)
     index = fetch_articles(json_data)
@@ -104,41 +103,54 @@ def prepare_and_upload_site_to_github(config: "str", site_directory: "str"):
     index_html = create_index_html(index)
     index_context = dict(index_html=index_html)
     index_html_page = render_page(INDEX_TEMPLATE, index_context)
-    write_html_page(site_directory + INDEX_FILE, index_html_page)
+    write_html_page_to_file(os.path.join(site_directory, INDEX_FILE), index_html_page)
 
     for article in index['articles']:
-        article_text = load_article_text(article['source'], article['title'])
+        article_text = load_article_text_from_file(article['source'], article['title'])
         article_html = markdown(article_text, safe_mode='escape')
         article_context = dict(article_html=article_html)
         article_html_page = render_page(ARTICLE_TEMPLATE, article_context)
         article_file = "{:03d}.html".format(article['id'])
-        write_html_page(site_directory + article_file, article_html_page)
+        write_html_page_to_file(os.path.join(site_directory, article_file), article_html_page)
 
     push_site_to_github(site_directory)
     print("all pages all uploaded to the site {}".format(site_directory))
 
 
 class DirEventsHandler(FileSystemEventHandler):
+    def __init__(self, folder=None):
+        if folder is not None:
+            self.folder = folder
+        else:
+            print("DirEventsHandler initialization error: no domain folder name")
+
     def on_any_event(self, event):
-        print("path={} event={}".format(event.src_path, event.event_type))
-        if event.is_directory:
-            return None
-        prepare_and_upload_site_to_github(CONFIG_FILE, site_folder_name)
-        print("folder {} is monitored for changes".format(ARTICLES_FOLDER))
+        print("path={} event={} site_folder={}".format(event.src_path, event.event_type, self.folder))
+        if not event.is_directory:
+            prepare_and_upload_site_to_github(CONFIG_FILE, self.folder)
+            print("folder {} is monitored for changes".format(ARTICLES_FOLDER))
+
+
+def is_domain_name_valid(string: str) -> bool:
+    match = re.search(DOMAIN_FORMAT, string)
+    return True if match else False
 
 
 if __name__ == "__main__":
-    site_url = sys.argv[1]
-    site_folder_name = "./" + site_url + "/"
-
-    prepare_and_upload_site_to_github(CONFIG_FILE, site_folder_name)
-    observer = Observer()
-    observer.schedule(DirEventsHandler(), ARTICLES_FOLDER, recursive=True)
-    observer.start()
-    print("folder {} is monitored for changes".format(ARTICLES_FOLDER))
-    try:
-        while True:
-            time.sleep(5)
-    except KeyboardInterrupt:
-        observer.stop()
-    observer.join()
+    domain_name = sys.argv[1]
+    if not is_domain_name_valid(domain_name):
+        print("invalid domain name format {}".format(domain_name))
+    else:
+        site_folder_name = os.path.join(os.getcwd(), domain_name)
+        clean_site_directory(site_folder_name)
+        prepare_and_upload_site_to_github(CONFIG_FILE, site_folder_name)
+        observer = Observer()
+        observer.schedule(DirEventsHandler(folder=site_folder_name), ARTICLES_FOLDER, recursive=True)
+        observer.start()
+        print("domain folder {} is monitored for changes".format(ARTICLES_FOLDER))
+        try:
+            while True:
+                time.sleep(MONITOR_TIMEOUT)
+        except KeyboardInterrupt:
+            observer.stop()
+        observer.join()
