@@ -39,7 +39,7 @@ def fetch_articles(json_catalog: dict) -> dict:
     articles = json_catalog['articles']
     topics = json_catalog['topics']
     for article_id, article_text in enumerate(articles):
-        article_text['source'] = 'articles/' + article_text['source']
+        article_text['source'] = os.path.join('articles', article_text['source'])
         article_text['id'] = article_id
     return {'articles': articles, 'topics': topics}
 
@@ -51,8 +51,8 @@ def render_page(html_template: str, context: dict) -> str:
 def create_index_html(catalog_data: dict) -> str:
     markdown_text = ""
     for topic in catalog_data['topics']:
-        head_line = HEADLINE_PREFIX.format(topic['title'])
-        markdown_text = markdown_text + head_line
+        topic_headline = HEADLINE_PREFIX.format(topic['title'])
+        markdown_text = markdown_text + topic_headline
         for article in catalog_data['articles']:
             if article['topic'] == topic['slug']:
                 article_headline = "- [{}](./{:03d}.html)\n".format(article['title'], article['id'])
@@ -132,25 +132,24 @@ class DirEventsHandler(FileSystemEventHandler):
 
 
 def is_domain_name_valid(string: str) -> bool:
-    match = re.search(DOMAIN_FORMAT, string)
-    return True if match else False
+    return bool(re.search(DOMAIN_FORMAT, string))
 
 
 if __name__ == "__main__":
     domain_name = sys.argv[1]
     if not is_domain_name_valid(domain_name):
         print("invalid domain name format {}".format(domain_name))
-    else:
-        site_folder_name = os.path.join(os.getcwd(), domain_name)
-        clean_site_directory(site_folder_name)
-        prepare_and_upload_site_to_github(CONFIG_FILE, site_folder_name)
-        observer = Observer()
-        observer.schedule(DirEventsHandler(folder=site_folder_name), ARTICLES_FOLDER, recursive=True)
-        observer.start()
-        print("domain folder {} is monitored for changes".format(ARTICLES_FOLDER))
-        try:
-            while True:
-                time.sleep(MONITOR_TIMEOUT)
-        except KeyboardInterrupt:
-            observer.stop()
-        observer.join()
+        exit(1)
+    site_folder_name = os.path.join(os.getcwd(), domain_name)
+    clean_site_directory(site_folder_name)
+    prepare_and_upload_site_to_github(CONFIG_FILE, site_folder_name)
+    observer = Observer()
+    observer.schedule(DirEventsHandler(folder=site_folder_name), ARTICLES_FOLDER, recursive=True)
+    observer.start()
+    print("folder with source articles {} is monitored for changes".format(ARTICLES_FOLDER))
+    try:
+        while True:
+            time.sleep(MONITOR_TIMEOUT)
+    except KeyboardInterrupt:
+        observer.stop()
+    observer.join()
